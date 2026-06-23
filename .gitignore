@@ -1,0 +1,48 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+.env
+.venv/
+venv/
+env/
+ENV/
+
+# ── Large data files (do not commit to git) ───────────────────────────────────
+data/raw/*.csv
+data/processed/*.parquet
+data/curated/*.parquet
+
+# ── DuckDB warehouse ───────────────────────────────────────────────────────────
+warehouse/*.duckdb
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/*.log
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── IDE / editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Airflow (if used locally) ─────────────────────────────────────────────────
+airflow_home/
+airflow.cfg
+airflow.db

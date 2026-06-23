@@ -1,0 +1,8 @@
+pandas>=2.0.0
+duckdb>=0.10.0
+pyarrow>=14.0.0
+pyyaml>=6.0.0
+requests>=2.31.0
+
+# Airflow is optional — install separately if you want to run the DAG
+# pip install apache-airflow>=2.8.0

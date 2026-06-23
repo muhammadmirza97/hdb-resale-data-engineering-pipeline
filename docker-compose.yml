@@ -1,0 +1,33 @@
+version: "3.8"
+
+# ── How to use ────────────────────────────────────────────────────────────────
+#
+#   Run the full pipeline:
+#     docker-compose up --build
+#
+#   Run a single step (e.g. ingest only):
+#     docker-compose run --rm hdb-pipeline python -m src.ingest
+#
+#   Open an interactive shell:
+#     docker-compose run --rm hdb-pipeline bash
+#
+#   All outputs are written back to your local machine via volume mounts:
+#     data/      warehouse/      reports/      logs/
+#
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+  hdb-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hdb_resale_pipeline
+    environment:
+      - PYTHONUNBUFFERED=1      # ensures print() output is visible in real-time
+    volumes:
+      # Mount output directories so results persist after the container exits
+      - ./data:/app/data
+      - ./warehouse:/app/warehouse
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    command: python -m src.run_pipeline

@@ -1,0 +1,34 @@
+data_source:
+  # Set type to "url" or "local"
+  type: "url"
+  # Raw GitHub CSV from the Week 1 capstone project
+  csv_url: "https://raw.githubusercontent.com/muhammadmirza97/Capstone-Project-SNAIC-Week-1/main/data/resale-flat-prices-based-on-registration-date-from-jan-2017-onwards.csv"
+  # Used if type is "local" or as the fallback save path
+  local_csv_path: "data/raw/hdb_resale_raw.csv"
+
+database:
+  path: "warehouse/hdb_resale.duckdb"
+
+tables:
+  raw_table: "raw_hdb_resale"
+  clean_table: "clean_hdb_resale"
+
+expected_columns:
+  - month
+  - town
+  - flat_type
+  - block
+  - street_name
+  - storey_range
+  - floor_area_sqm
+  - flat_model
+  - lease_commence_date
+  - remaining_lease
+  - resale_price
+
+logging:
+  level: "INFO"
+  log_file: "logs/pipeline.log"
+
+reports:
+  quality_report: "reports/data_quality_report.csv"
