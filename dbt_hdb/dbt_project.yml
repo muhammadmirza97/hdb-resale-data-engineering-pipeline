@@ -1,0 +1,21 @@
+name: 'hdb_resale'
+version: '1.0.0'
+config-version: 2
+
+profile: 'hdb_duckdb'
+
+model-paths: ["models"]
+test-paths:  ["tests"]
+docs-paths:  ["docs"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  hdb_resale:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

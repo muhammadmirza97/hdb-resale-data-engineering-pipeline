@@ -1,21 +1,31 @@
 """
-Airflow DAG — HDB Resale ELT Pipeline
-======================================
-Wraps each pipeline step as an Airflow PythonOperator task.
+Airflow DAG — HDB Resale Data Engineering + ML Pipeline
+=========================================================
+Wraps every pipeline step as a PythonOperator task.
 
-Task dependency chain:
-  ingest_data >> validate_data >> transform_data >> create_curated_tables
+Task dependency chain (8 tasks):
+  ingest_data
+    >> validate_data
+    >> clean_transform_data
+    >> create_curated_tables
+    >> train_model
+    >> generate_predictions
+    >> evaluate_model
+    >> check_alerts
 
-Schedule: weekly (every Monday at 00:00 UTC)
+Schedule: daily at midnight UTC
+  - Most tasks run at midnight (@daily)
+  - evaluate_model is separately scheduled at 08:00 UTC via its own DAG
+    (or via the `evaluation_schedule` cron in config.yaml)
 
-To test locally (Airflow must be installed separately — see README):
-  pip install apache-airflow
+To run locally (Airflow must be installed separately):
+  pip install -r requirements-airflow.txt
   export AIRFLOW_HOME=$(pwd)/airflow_home
   airflow db migrate
-  airflow standalone
-  # Then open http://localhost:8080 and trigger 'hdb_resale_pipeline'
+  airflow standalone          # opens http://localhost:8080
+  # Trigger 'hdb_resale_pipeline' manually or wait for schedule
 
-Note: The heavy logic lives in src/ — the DAG just wires task execution.
+Note: All heavy logic lives in src/ — the DAG just wires task execution.
 """
 
 import os
@@ -32,27 +42,29 @@ if _PROJECT_ROOT not in sys.path:
 
 # ── Default arguments ─────────────────────────────────────────────────────────
 default_args = {
-    "owner": "data-engineering",
-    "depends_on_past": False,
-    "start_date": datetime(2024, 1, 1),
+    "owner":            "data-engineering",
+    "depends_on_past":  False,
+    "start_date":       datetime(2024, 1, 1),
     "email_on_failure": False,
-    "email_on_retry": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
+    "email_on_retry":   False,
+    "retries":          2,
+    "retry_delay":      timedelta(minutes=5),
 }
 
 # ── DAG definition ────────────────────────────────────────────────────────────
 dag = DAG(
     dag_id="hdb_resale_pipeline",
     default_args=default_args,
-    description="End-to-end ELT pipeline for Singapore HDB resale data",
-    schedule_interval="@weekly",
+    description=(
+        "End-to-end HDB resale data engineering + ML pipeline: "
+        "ingest → validate → clean → transform → curate → train → predict → evaluate → alerts"
+    ),
+    schedule_interval="@daily",
     catchup=False,
-    tags=["hdb", "data-engineering", "elt", "batch"],
+    tags=["hdb", "data-engineering", "elt", "ml", "batch"],
 )
 
 # ── Task callables ────────────────────────────────────────────────────────────
-
 def task_ingest(**context):
     from src.ingest import ingest
     ingest()
@@ -63,8 +75,10 @@ def task_validate(**context):
     validate()
 
 
-def task_transform(**context):
+def task_clean_transform(**context):
+    from src.clean import clean
     from src.transform import transform
+    clean()
     transform()
 
 
@@ -73,8 +87,27 @@ def task_curate(**context):
     curate()
 
 
-# ── Operators ─────────────────────────────────────────────────────────────────
+def task_train(**context):
+    from src.train_model import train
+    train()
 
+
+def task_predict(**context):
+    from src.predict import predict
+    predict()
+
+
+def task_evaluate(**context):
+    from src.evaluate_model import evaluate
+    evaluate()
+
+
+def task_alerts(**context):
+    from src.alerts import check_alerts
+    check_alerts()
+
+
+# ── Operators ─────────────────────────────────────────────────────────────────
 ingest_op = PythonOperator(
     task_id="ingest_data",
     python_callable=task_ingest,
@@ -87,9 +120,9 @@ validate_op = PythonOperator(
     dag=dag,
 )
 
-transform_op = PythonOperator(
-    task_id="transform_data",
-    python_callable=task_transform,
+clean_transform_op = PythonOperator(
+    task_id="clean_transform_data",
+    python_callable=task_clean_transform,
     dag=dag,
 )
 
@@ -99,5 +132,38 @@ curate_op = PythonOperator(
     dag=dag,
 )
 
-# ── Task dependencies ─────────────────────────────────────────────────────────
-ingest_op >> validate_op >> transform_op >> curate_op
+train_op = PythonOperator(
+    task_id="train_model",
+    python_callable=task_train,
+    dag=dag,
+)
+
+predict_op = PythonOperator(
+    task_id="generate_predictions",
+    python_callable=task_predict,
+    dag=dag,
+)
+
+evaluate_op = PythonOperator(
+    task_id="evaluate_model",
+    python_callable=task_evaluate,
+    dag=dag,
+)
+
+alerts_op = PythonOperator(
+    task_id="check_alerts",
+    python_callable=task_alerts,
+    dag=dag,
+)
+
+# ── Task dependency chain ─────────────────────────────────────────────────────
+(
+    ingest_op
+    >> validate_op
+    >> clean_transform_op
+    >> curate_op
+    >> train_op
+    >> predict_op
+    >> evaluate_op
+    >> alerts_op
+)

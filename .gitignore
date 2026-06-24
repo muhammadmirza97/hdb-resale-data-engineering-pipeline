@@ -19,9 +19,21 @@ ENV/
 data/raw/*.csv
 data/processed/*.parquet
 data/curated/*.parquet
+data/predictions/*.parquet
 
 # ── DuckDB warehouse ───────────────────────────────────────────────────────────
 warehouse/*.duckdb
+
+# ── Trained models ────────────────────────────────────────────────────────────
+models/*.joblib
+models/*.pkl
+models/*.h5
+
+# ── MLflow experiment tracking ────────────────────────────────────────────────
+mlruns/
+
+# ── Reports (generated files) ─────────────────────────────────────────────────
+reports/*.csv
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 logs/*.log
@@ -46,3 +58,11 @@ desktop.ini
 airflow_home/
 airflow.cfg
 airflow.db
+
+# ── dbt ───────────────────────────────────────────────────────────────────────
+dbt_hdb/target/
+dbt_hdb/dbt_packages/
+
+# ── Submission / personal files (never commit) ────────────────────────────────
+submission/
+resume_bullets.*

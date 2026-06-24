@@ -1,33 +1,31 @@
 """
 Step 2 — Validate
 =================
-Reads the raw staging table from DuckDB and runs data quality checks:
+Reads the raw staging table from DuckDB and runs data quality checks.
 
+Checks performed:
   - Row count
   - Column count
   - Expected schema (column presence)
   - Missing values per column
   - Duplicate rows
   - Data types
-  - Sanity checks on key numeric columns
+  - Sanity checks on key numeric columns (resale_price, floor_area_sqm)
 
 Saves a detailed report to reports/data_quality_report.csv.
-Pipeline logs a WARNING if any FAIL-level check is found, but does
-not hard-stop so the operator can review the report and decide.
+Logs a WARNING for any FAIL-level finding, but does not halt the pipeline
+so the operator can review the report and decide whether to proceed.
 """
 
 import logging
-from pathlib import Path
 
 import pandas as pd
-import yaml
 
-from src.paths import BASE_DIR, QUALITY_REPORT_PATH
+from src.config_loader import load_config
+from src.paths import QUALITY_REPORT_PATH
 from src.storage import get_connection
 
 logger = logging.getLogger(__name__)
-
-CONFIG_PATH = BASE_DIR / "config" / "config.yaml"
 
 DEFAULT_EXPECTED_COLS = [
     "month", "town", "flat_type", "block", "street_name",
@@ -36,17 +34,12 @@ DEFAULT_EXPECTED_COLS = [
 ]
 
 
-def _load_config() -> dict:
-    with open(CONFIG_PATH) as f:
-        return yaml.safe_load(f)
-
-
 def validate() -> pd.DataFrame:
     """
     Run all quality checks against the raw DuckDB staging table.
     Returns the quality report as a DataFrame.
     """
-    config = _load_config()
+    config = load_config()
     raw_table = config["tables"]["raw_table"]
     expected_cols = config.get("expected_columns", DEFAULT_EXPECTED_COLS)
 
@@ -56,13 +49,11 @@ def validate() -> pd.DataFrame:
     def add(check: str, value, status: str) -> None:
         results.append({"Check": check, "Value": str(value), "Status": status})
 
-    # ── Pull lightweight metadata without loading all rows into memory ────────
-
     # 1. Row count
     row_count = conn.execute(f"SELECT COUNT(*) FROM {raw_table}").fetchone()[0]
     add("Row Count", f"{row_count:,}", "OK" if row_count > 0 else "FAIL")
 
-    # 2. Column count
+    # 2. Column info
     col_info = conn.execute(
         f"SELECT column_name, data_type FROM information_schema.columns "
         f"WHERE table_name = '{raw_table}'"
@@ -71,7 +62,7 @@ def validate() -> pd.DataFrame:
     col_types = {r[0]: r[1] for r in col_info}
     add("Column Count", len(col_names), "OK")
 
-    # 3. Expected columns
+    # 3. Expected columns present
     missing_cols = [c for c in expected_cols if c not in col_names]
     add(
         "Expected Columns",
@@ -80,20 +71,17 @@ def validate() -> pd.DataFrame:
     )
 
     # 4. Duplicate rows
-    dupe_count = conn.execute(
-        f"SELECT COUNT(*) - COUNT(*) OVER () FROM "
-        f"(SELECT COUNT(*) AS n FROM {raw_table} GROUP BY ALL HAVING n > 1)"
-    ).fetchone()
-    # Simpler dedup count:
     total = conn.execute(f"SELECT COUNT(*) FROM {raw_table}").fetchone()[0]
-    distinct = conn.execute(f"SELECT COUNT(*) FROM (SELECT DISTINCT * FROM {raw_table})").fetchone()[0]
+    distinct = conn.execute(
+        f"SELECT COUNT(*) FROM (SELECT DISTINCT * FROM {raw_table})"
+    ).fetchone()[0]
     dupes = total - distinct
     add("Duplicate Rows", f"{dupes:,}", "WARN" if dupes > 0 else "OK")
 
-    # 5. Missing values per column (NULL count via SQL)
+    # 5. Missing values per column
     for col in col_names:
         null_count = conn.execute(
-            f"SELECT COUNT(*) FROM {raw_table} WHERE \"{col}\" IS NULL"
+            f'SELECT COUNT(*) FROM {raw_table} WHERE "{col}" IS NULL'
         ).fetchone()[0]
         pct = round(null_count / max(row_count, 1) * 100, 2)
         add(
@@ -106,7 +94,7 @@ def validate() -> pd.DataFrame:
     for col, dtype in col_types.items():
         add(f"Data Type [{col}]", dtype, "OK")
 
-    # 7. Key numeric sanity checks
+    # 7. Numeric sanity checks
     if "resale_price" in col_names:
         bad = conn.execute(
             f"SELECT COUNT(*) FROM {raw_table} WHERE resale_price <= 0 OR resale_price IS NULL"
@@ -121,21 +109,21 @@ def validate() -> pd.DataFrame:
 
     conn.close()
 
-    # ── Save report ───────────────────────────────────────────────────────────
+    # Save report
     report = pd.DataFrame(results)
     QUALITY_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     report.to_csv(QUALITY_REPORT_PATH, index=False)
 
     fail_count = int((report["Status"] == "FAIL").sum())
     warn_count = int((report["Status"] == "WARN").sum())
-    ok_count = int((report["Status"] == "OK").sum())
+    ok_count   = int((report["Status"] == "OK").sum())
 
     logger.info(f"Validation complete | OK={ok_count}  WARN={warn_count}  FAIL={fail_count}")
     print(f"[VALIDATE] Report    : {QUALITY_REPORT_PATH}")
     print(f"[VALIDATE] OK={ok_count}  WARN={warn_count}  FAIL={fail_count}")
 
     if fail_count > 0:
-        logger.warning(f"{fail_count} FAIL(s) in quality report — review {QUALITY_REPORT_PATH}")
+        logger.warning(f"{fail_count} FAIL(s) found — review {QUALITY_REPORT_PATH}")
 
     return report
 

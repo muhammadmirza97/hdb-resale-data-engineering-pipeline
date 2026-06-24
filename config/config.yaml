@@ -3,15 +3,24 @@ data_source:
   type: "url"
   # Raw GitHub CSV from the Week 1 capstone project
   csv_url: "https://raw.githubusercontent.com/muhammadmirza97/Capstone-Project-SNAIC-Week-1/main/data/resale-flat-prices-based-on-registration-date-from-jan-2017-onwards.csv"
-  # Used if type is "local" or as the fallback save path
+  # Used when type is "local" or as the save path for raw copy
   local_csv_path: "data/raw/hdb_resale_raw.csv"
+  # How data is refreshed: "scheduled_batch" (default) or "streaming_simulation"
+  refresh_mode: "scheduled_batch"
+  # Max retries for URL download
+  download_retries: 3
+  download_retry_delay: 5
 
 database:
-  path: "warehouse/hdb_resale.duckdb"
+  duckdb_path: "warehouse/hdb_resale.duckdb"
 
 tables:
   raw_table: "raw_hdb_resale"
+  stg_table: "stg_hdb_resale"
   clean_table: "clean_hdb_resale"
+  predictions_table: "predictions"
+  evaluation_table: "model_evaluation"
+  alerts_table: "alerts"
 
 expected_columns:
   - month
@@ -26,9 +35,40 @@ expected_columns:
   - remaining_lease
   - resale_price
 
+ml:
+  target: "resale_price"
+  features:
+    numeric:
+      - floor_area_sqm
+      - storey_mid
+      - sale_year
+      - sale_month
+      - remaining_lease_months
+      - flat_age
+    categorical:
+      - town
+      - flat_type
+  model_name: "hdb_resale_price_model"
+  test_size: 0.2
+  random_state: 42
+  n_estimators: 100
+  max_depth: 15
+
+alerts:
+  price_per_sqm_high_ratio: 1.5   # alert if town median $/sqm > 1.5x overall median
+  price_per_sqm_low_ratio: 0.6    # alert if town median $/sqm < 0.6x overall median
+
+airflow:
+  schedule_interval: "@daily"
+  evaluation_schedule: "0 8 * * *"   # 08:00 daily
+  retries: 2
+  retry_delay_minutes: 5
+
 logging:
   level: "INFO"
   log_file: "logs/pipeline.log"
 
 reports:
   quality_report: "reports/data_quality_report.csv"
+  evaluation_report: "reports/model_evaluation.csv"
+  alerts_report: "reports/alerts.csv"

@@ -1,0 +1,11 @@
+# Install this file ONLY if you want to run the Airflow DAG locally.
+# Airflow has heavy dependencies — keep it separate from the main requirements.
+#
+# Setup:
+#   pip install -r requirements-airflow.txt
+#   export AIRFLOW_HOME=$(pwd)/airflow_home
+#   airflow db migrate
+#   airflow standalone            # opens http://localhost:8080
+#   # Trigger 'hdb_resale_pipeline' from the Airflow UI
+
+apache-airflow>=2.8.0

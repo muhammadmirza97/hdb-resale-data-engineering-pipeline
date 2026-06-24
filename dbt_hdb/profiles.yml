@@ -1,0 +1,7 @@
+hdb_duckdb:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "../warehouse/hdb_resale.duckdb"
+      threads: 4
