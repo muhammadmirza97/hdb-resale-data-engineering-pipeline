@@ -15,6 +15,7 @@ Features reused from Week 1 capstone:
 """
 
 import logging
+from inspect import signature
 from pathlib import Path
 
 import joblib
@@ -132,7 +133,14 @@ def train() -> list[dict]:
                 "test_size":    test_size,
             })
             mlflow.log_metrics({"mae": mae, "rmse": rmse, "r2": r2, "mape": mape})
-            mlflow.sklearn.log_model(pipeline, "model")
+            model_options = {}
+            if (
+                isinstance(pipeline.named_steps["model"], RandomForestRegressor)
+                and "skops_trusted_types" in signature(mlflow.sklearn.log_model).parameters
+            ):
+                # This object was fitted in this process. Never infer trust from an external artifact.
+                model_options["skops_trusted_types"] = ["sklearn.tree._tree.Tree"]
+            mlflow.sklearn.log_model(pipeline, "model", **model_options)
 
             result = {
                 "model": name,
